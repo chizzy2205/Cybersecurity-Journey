@@ -1,1 +1,14 @@
+Doing a TryHackMe lab "Guided Pentest: Web".
+teaching me on how to perform pentest on a web server which client thinks may have security issues.
 
+"""
+Learning Objectives
+The engagement follows this path:
+
+Reconnaissance and enumeration - Discover what the application exposes
+Insecure Direct Object Reference (IDOR) - Access data belonging to other users
+Weak password reset - Take over an account through a flawed reset mechanism
+Admin panel access - Escalate from a regular user to an administrator
+Remote code execution - Leverage admin functionality to execute commands on the server
+Each vulnerability builds on the information gathered in the previous step. This is how real-world penetration tests work; you rarely find a single critical flaw sitting in the open. Instead, you chain smaller weaknesses together until they add up to something significant.
+"""
