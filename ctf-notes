@@ -1,18 +1,107 @@
-Doing a TryHackMe lab "Guided Pentest: Web".
-on how to perform pentest on a web server which client thinks may have security issues.
+Guided Web Application Penetration Test — Write-Up
 
-"""
-Learning Objectives
-The engagement follows this path:
+Platform: TryHackMe — Guided Pentest: Web
+Target: 10.128.174.174
+Objective: Assess a client's web application for security vulnerabilities, simulating a real-world engagement.
 
-Reconnaissance and enumeration - Discover what the application exposes
-Insecure Direct Object Reference (IDOR) - Access data belonging to other users
-Weak password reset - Take over an account through a flawed reset mechanism
-Admin panel access - Escalate from a regular user to an administrator
-Remote code execution - Leverage admin functionality to execute commands on the server
-Each vulnerability builds on the information gathered in the previous step. This is how real-world penetration tests work; you rarely find a single critical flaw sitting in the open. Instead, you chain smaller weaknesses together until they add up to something significant.
-"""
+Engagement Path
+
+This engagement followed a realistic chain of escalation, where each step built on information gathered in the one before it:
 
 
-Still in that topic, tried Enumeration of the target - using its Ip address (i connected via the OpenVPN to THM's Box)
-Enumerated what ports, services and service versions were open. Also figured the website stack - Apache, PHP and MySQL
+Reconnaissance and enumeration
+Insecure Direct Object Reference (IDOR)
+Weak password reset mechanism
+Admin panel access
+Remote code execution (RCE)
+
+
+This mirrors how real-world penetration tests typically unfold — a single critical flaw is rarely sitting out in the open. Instead, several individually moderate weaknesses are chained together until they add up to full compromise.
+
+1. Reconnaissance and Enumeration
+
+
+Connected to the target environment via OpenVPN.
+Scanned the target to identify open ports, running services, and service versions.
+Used curl -I http://10.128.174.174 to inspect response headers and confirm the technology stack: Apache, PHP, and MySQL.
+Manually browsed the site to understand its structure and functionality before testing further.
+Used Gobuster to brute-force hidden directories and files, uncovering several points of interest: /api, /admin, /login.php, /uploads.
+
+
+2. API Exposure
+
+
+Queried the /api/ root directly and received a full, unauthenticated list of available endpoints — including /api/user, /api/jobs, and /api/applications.
+This is a vulnerability in its own right: an API that discloses its entire endpoint map without requiring authentication removes the need for an attacker to guess or infer functionality — it hands over the map for free.
+
+
+3. Insecure Direct Object Reference (IDOR)
+
+
+Attempting to access /admin redirected to a login page, so a standard user account was created to explore normal application behaviour.
+While reviewing the user profile page (/profile.php?id=), noticed the id parameter was directly user-controllable.
+By modifying the id value — both on the web page and via the /api/user endpoint — was able to retrieve other users' data, including the administrator's profile, without needing to authenticate as that user.
+This confirmed a significant IDOR vulnerability: the application trusted the supplied ID and returned data without verifying whether the requesting session was actually authorized to view that specific record.
+
+
+4. Weak Password Reset Mechanism
+
+
+With the administrator's email address obtained from the IDOR flaw, attempted a password reset on their account.
+The application displayed the reset token directly in the response, rather than sending it exclusively through the registered email address.
+Even without that flaw, the token itself was weak — a 6-digit numeric code, easily brute-forced given no apparent rate-limiting.
+Successfully reset the administrator's password and logged in with full admin access.
+
+
+5. Admin Panel Access and File Upload Abuse
+
+
+Inside the admin panel, identified a file upload feature intended for documents (PDF, DOCX, PNG).
+Inspecting the upload form revealed the file type restriction was enforced only via the HTML accept attribute — a client-side restriction with no bearing on what the server itself would accept.
+Removing this attribute via browser DevTools bypassed the front-end restriction. The server also blacklisted common executable extensions (.php, .txt), but did not account for .phtml — an older, still-executable PHP file extension.
+Uploaded a simple PHP web shell saved as shell.phtml, exploiting this blacklist gap.
+
+
+6. Remote Code Execution
+
+
+Confirmed the uploaded file's storage location (/uploads/documents/) from information disclosed earlier on the upload page.
+Executed commands directly via the web shell:
+
+
+  curl "http://10.128.174.174/uploads/documents/shell.phtml?cmd=whoami"
+  → www-data
+
+
+Confirmed further system details (hostname, kernel version) and read /etc/passwd to enumerate system users.
+Upgraded from the web shell to a fully interactive reverse shell using a bash -i payload redirected through /dev/tcp, caught with a netcat listener.
+Verified shell access as www-data, the default Apache service account on Ubuntu.
+Retrieved the engagement's flag file, confirming successful completion. Privilege escalation from www-data was identified as a logical next step but was outside the scope of this exercise.
+
+
+Key Takeaways
+
+
+API endpoints should only ever reveal their structure or data to authenticated, authorized users — an unauthenticated request should never return a full endpoint map.
+IDOR vulnerabilities arise when an application trusts a user-supplied identifier without verifying that the current session is actually authorized to access that specific record. Validating that an ID is well-formed is not the same as validating that the requester owns it.
+Password reset tokens must only ever be delivered through a verified, out-of-band channel (e.g. email) — never displayed anywhere in the application's own response.
+Token strength matters: short numeric codes are trivially brute-forceable without strict rate-limiting and expiry.
+Client-side validation (HTML attributes, JavaScript checks) is a UX convenience, never a security control. All meaningful validation — file type, size, content — must be enforced server-side.
+Blacklisting dangerous file extensions is a weak defence, since attackers can often find lesser-known executable extensions (like .phtml) that a blacklist fails to anticipate. Allowlisting explicitly safe extensions is significantly more robust.
+Uploaded files should never be stored in a location where the web server will execute them as code, regardless of how well upload validation is implemented — this removes the impact of a validation bypass even if one occurs.
+Once remote code execution is achieved, upgrading a limited web shell to a fully interactive reverse shell is a natural next step, enabling more effective enumeration and privilege escalation testing.
+
+
+Remediation Recommendations
+
+
+Implement proper authorization checks (not just authentication) on every endpoint that returns user-specific data.
+Deliver password reset tokens exclusively via verified out-of-band channels, with enforced expiry and attempt rate-limiting.
+Enforce file upload validation server-side using an allowlist of safe extensions, and validate actual file content rather than relying on the extension alone.
+Store uploaded files outside any web-executable directory, or explicitly disable script execution within upload directories at the web server configuration level.
+Apply the principle of least privilege to the web server's service account to limit the impact of any future RCE.
+
+
+Engagement Summary
+
+This engagement demonstrated a complete attack chain, progressing from unauthenticated reconnaissance to full remote code execution, by chaining several individually moderate vulnerabilities: an over-exposed API, an IDOR flaw enabling account takeover, a weak password reset mechanism, and insufficient server-side file upload validation. No single flaw was catastrophic in isolation — the overall risk emerged from how these weaknesses compounded together. This reflects a common real-world pattern: attackers rarely need one severe vulnerability when several smaller ones can be chained into something significant.
