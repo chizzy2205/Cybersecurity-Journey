@@ -1,5 +1,5 @@
 Doing a TryHackMe lab "Guided Pentest: Web".
-teaching me on how to perform pentest on a web server which client thinks may have security issues.
+on how to perform pentest on a web server which client thinks may have security issues.
 
 """
 Learning Objectives
@@ -12,3 +12,7 @@ Admin panel access - Escalate from a regular user to an administrator
 Remote code execution - Leverage admin functionality to execute commands on the server
 Each vulnerability builds on the information gathered in the previous step. This is how real-world penetration tests work; you rarely find a single critical flaw sitting in the open. Instead, you chain smaller weaknesses together until they add up to something significant.
 """
+
+
+Still in that topic, tried Enumeration of the target - using its Ip address (i connected via the OpenVPN to THM's Box)
+Enumerated what ports, services and service versions were open. Also figured the website stack - Apache, PHP and MySQL
